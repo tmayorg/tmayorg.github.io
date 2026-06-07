@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <title>Event & Bill Reminder</title>
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        neon: {
+                            green: '#4ade80',
+                            glow: 'rgba(74, 222, 128, 0.5)'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Load Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        /* Custom Checkbox Styling - Subtle Amber */
+        .custom-checkbox {
+            appearance: none;
+            width: 2rem;
+            height: 2rem;
+            border: 3px solid #475569;
+            border-radius: 0.5rem;
+            outline: none;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+            background-color: #1e293b;
+            flex-shrink: 0;
+        }
+
+        .custom-checkbox:checked {
+            background-color: #0f172a;
+            border-color: #475569;
+            box-shadow: none;
+        }
+
+        .custom-checkbox:checked::after {
+            content: '';
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%23fbbf24' d='M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E");
+            background-size: 75%;
+            background-position: center;
+            background-repeat: no-repeat;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* Smaller checkbox variant for the form */
+        .custom-checkbox.small-checkbox {
+            width: 1.25rem;
+            height: 1.25rem;
+            border-width: 2px;
+            border-radius: 0.25rem;
+        }
+
+        /* Smooth transitions for list items */
+        .list-item-enter {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Neon Highlight Effects */
+        .neon-highlight {
+            border: 2px solid theme('colors.neon.green') !important;
+            box-shadow: 0 0 15px theme('colors.neon.glow');
+        }
+        
+        .pulse-effect {
+            animation: pulse-neon 2s infinite;
+        }
+
+        @keyframes pulse-neon {
+            0% { box-shadow: 0 0 10px rgba(74, 222, 128, 0.4); }
+            50% { box-shadow: 0 0 20px rgba(74, 222, 128, 0.8); }
+            100% { box-shadow: 0 0 10px rgba(74, 222, 128, 0.4); }
+        }
+
+        /* Completed item styling */
+        .completed-item {
+            opacity: 0.5;
+            background-color: #0f172a !important;
+            border-color: #1e293b !important;
+        }
+        
+        .completed-item .item-title {
+            text-decoration: line-through;
+            color: #64748b;
+        }
+        
+        /* Hide scrollbar for clean look */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden selection:bg-neon-green selection:text-slate-900">
+
+    <!-- App Container -->
+    <div class="max-w-md w-full mx-auto h-full flex flex-col relative bg-slate-900 shadow-2xl">
+        
+        <!-- Header -->
+        <header class="p-6 pb-4 bg-slate-900/80 backdrop-blur-md sticky top-0 z-10 border-b border-slate-800 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-neon-green to-emerald-400">
+                    Reminders
+                </h1>
+                <p class="text-slate-400 text-sm mt-1" id="currentDateDisplay">Loading date...</p>
+            </div>
+            <button onclick="toggleForm()" class="bg-neon-green text-slate-900 w-10 h-10 rounded-full flex items-center justify-center hover:bg-emerald-400 transition-colors shadow-[0_0_15px_rgba(74,222,128,0.3)] active:scale-95">
+                <i class="ph ph-plus text-xl font-bold"></i>
+            </button>
+        </header>
+
+        <!-- List Area -->
+        <main class="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
+            
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden h-full flex-col items-center justify-center text-slate-500 space-y-3 pt-10">
+                <i class="ph ph-check-circle text-6xl opacity-20"></i>
+                <p class="text-center text-sm">All caught up!<br>Tap + to add a reminder.</p>
+            </div>
+
+            <!-- Reminders List -->
+            <ul id="remindersList" class="space-y-3">
+                <!-- Items injected here by JS -->
+            </ul>
+        </main>
+
+        <!-- Add Form Overlay -->
+        <div id="addFormContainer" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-50 hidden flex-col justify-end sm:justify-center p-4">
+            <div class="bg-slate-800 border border-slate-700 w-full max-w-md mx-auto rounded-2xl p-6 shadow-2xl transform transition-transform duration-300 translate-y-full sm:translate-y-0" id="addFormCard">
+                
+                <div class="flex justify-between items-center mb-5">
+                    <h2 class="text-xl font-semibold text-white">New Reminder</h2>
+                    <button type="button" id="cancelBtn" class="text-slate-400 hover:text-white p-1">
+                        <i class="ph ph-x text-xl"></i>
+                    </button>
+                </div>
+
+                <form id="addForm" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Title</label>
+                        <input type="text" id="titleInput" required placeholder="e.g., Pay Electric Bill" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-neon-green focus:ring-1 focus:ring-neon-green transition-colors">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Due Date</label>
+                        <input type="date" id="dateInput" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-neon-green focus:ring-1 focus:ring-neon-green transition-colors [color-scheme:dark]">
+                    </div>
+
+                    <!-- Type Selection -->
+                    <div class="flex flex-col gap-1 pt-2">
+                        <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Category</label>
+                        <div class="flex flex-wrap gap-4">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="category" value="bill" checked class="accent-neon-green w-4 h-4">
+                                <span class="text-slate-300 flex items-center"><i class="ph ph-invoice mr-1 text-rose-400"></i>Bill</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="category" value="event" class="accent-neon-green w-4 h-4">
+                                <span class="text-slate-300 flex items-center"><i class="ph ph-calendar-blank mr-1 text-sky-400"></i>Event</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="category" value="task" class="accent-neon-green w-4 h-4">
+                                <span class="text-slate-300 flex items-center"><i class="ph ph-check-square mr-1 text-amber-400"></i>Task</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Recurring Selection -->
+                    <div class="flex items-center gap-3 mt-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700">
+                        <input type="checkbox" id="recurringInput" class="custom-checkbox small-checkbox cursor-pointer">
+                        <label for="recurringInput" class="text-sm font-medium text-slate-200 cursor-pointer flex items-center gap-2">
+                            <i class="ph ph-arrows-clockwise text-sky-400"></i> Repeat Monthly
+                        </label>
+                    </div>
+
+                    <button type="submit" class="w-full bg-neon-green text-slate-900 font-bold py-3.5 rounded-lg mt-6 hover:bg-emerald-400 transition-colors shadow-lg active:scale-[0.98]">
+                        Save Reminder
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Data Management (Local Storage) ---
+        // Upgraded storage key to v4 to guarantee a completely fresh start and avoid bad previous saves
+        const STORAGE_KEY = 'neon_reminders_data_v4';
+        let reminders = [];
+
+        function loadData() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                try {
+                    reminders = JSON.parse(stored);
+                } catch (e) {
+                    console.error("Could not parse saved reminders, starting fresh.");
+                    reminders = [];
+                }
+            } else {
+                // Starting fresh with zero generic entries so it doesn't clutter the user's app
+                reminders = [];
+            }
+            renderList();
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(reminders));
+            } catch (e) {
+                console.error("Failed to save reminders: ", e);
+            }
+        }
+
+        // AUTO-SAVE TRIGGERS
+        // Save exactly when the user switches away from the app or closes the tab
+        window.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                saveData();
+            }
+        });
+        window.addEventListener('beforeunload', () => {
+            saveData();
+        });
+
+        function generateId() {
+            return Math.random().toString(36).substr(2, 9);
+        }
+
+        // --- Helper Functions ---
+        function formatDate(dateString) {
+            const options = { weekday: 'short', month: 'short', day: 'numeric' };
+            const date = new Date(dateString + 'T12:00:00'); // Prevent timezone shift
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        function isPastDue(dateString) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const checkDate = new Date(dateString + 'T12:00:00');
+            checkDate.setHours(0, 0, 0, 0);
+            return checkDate < today;
+        }
+
+        // --- UI Rendering ---
+        const remindersList = document.getElementById('remindersList');
+        const emptyState = document.getElementById('emptyState');
+        const currentDateDisplay = document.getElementById('currentDateDisplay');
+        
+        // Display today's date in header
+        currentDateDisplay.textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+        function renderList() {
+            remindersList.innerHTML = '';
+            
+            const todayStr = new Date().toISOString().split('T')[0];
+            
+            // Filter to only show items meant to be visible (hides future recurring items until the 1st)
+            let visibleReminders = reminders.filter(item => {
+                if (item.visibleFrom) {
+                    return todayStr >= item.visibleFrom;
+                }
+                return true;
+            });
+            
+            if (visibleReminders.length === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+            }
+
+            // Sort logic: Unfulfilled first (by date), then Fulfilled (by date)
+            visibleReminders.sort((a, b) => {
+                if (a.fulfilled === b.fulfilled) {
+                    return new Date(a.date) - new Date(b.date);
+                }
+                return a.fulfilled ? 1 : -1;
+            });
+
+            // Find the *next* unfulfilled item to apply the neon highlight
+            const nextUnfulfilledIndex = visibleReminders.findIndex(r => !r.fulfilled);
+
+            visibleReminders.forEach((item, index) => {
+                const li = document.createElement('li');
+                const isNext = index === nextUnfulfilledIndex;
+                const isCompleted = item.fulfilled;
+                
+                // Base classes
+                li.className = `list-item-enter bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col justify-between group transition-all duration-300 relative overflow-hidden ${isNext ? 'neon-highlight pulse-effect' : ''} ${isCompleted ? 'completed-item' : 'hover:border-slate-500'}`;
+                
+                // Icon based on category
+                let iconHtml = '';
+                if (item.category === 'bill') iconHtml = '<i class="ph ph-invoice text-rose-400 opacity-80"></i>';
+                else if (item.category === 'event') iconHtml = '<i class="ph ph-calendar-blank text-sky-400 opacity-80"></i>';
+                else iconHtml = '<i class="ph ph-check-square text-amber-400 opacity-80"></i>';
+
+                // Content HTML layout (Mobile friendly wrapping)
+                const isPast = isPastDue(item.date) && !item.fulfilled;
+                const dateColorClass = isPast ? 'text-rose-400 font-semibold' : 'text-slate-400';
+                
+                const pastDueTag = isPast ? '<span class="text-[10px] uppercase font-bold bg-rose-500/20 text-rose-400 px-1.5 py-0.5 rounded border border-rose-500/30">Past Due</span>' : '';
+                
+                const recurringTag = item.isRecurring ? '<span class="text-[10px] uppercase font-bold bg-sky-500/20 text-sky-400 px-1.5 py-0.5 rounded border border-sky-500/30 flex items-center gap-1"><i class="ph ph-arrows-clockwise"></i> Monthly</span>' : '';
+
+                // Up Next badge
+                const upNextBadge = isNext ? '<div class="absolute top-0 right-0 bg-neon-green text-slate-900 text-[10px] font-bold uppercase px-3 py-1 rounded-bl-lg shadow-sm tracking-wider">Up Next</div>' : '';
+
+                let fulfillmentInfo = '';
+                if (item.fulfilled && item.fulfilledDate) {
+                    fulfillmentInfo = `
+                        <div class="mt-3 text-xs text-slate-500 flex items-center gap-1 bg-slate-900/50 p-2 rounded-lg inline-flex">
+                            <i class="ph ph-check-circle text-amber-500"></i>
+                            Completed on ${formatDate(item.fulfilledDate)}
+                        </div>
+                    `;
+                }
+
+                li.innerHTML = `
+                    ${upNextBadge}
+                    <div class="flex items-start gap-4 w-full">
+                        <div class="pt-1">
+                            <input type="checkbox" class="custom-checkbox" 
+                                ${item.fulfilled ? 'checked' : ''} 
+                                onchange="toggleFulfillment('${item.id}', this.checked)">
+                        </div>
+                        
+                        <div class="flex-1 min-w-0"> <!-- min-w-0 is crucial for flex-wrap breaking -->
+                            <h3 class="item-title text-lg font-medium text-white break-words pr-12 transition-colors">
+                                ${item.title}
+                            </h3>
+                            
+                            <div class="flex flex-wrap items-center gap-2 mt-1.5">
+                                <div class="text-sm ${dateColorClass} flex items-center whitespace-nowrap">
+                                    ${iconHtml}
+                                    <span class="ml-1.5">Due: ${formatDate(item.date)}</span>
+                                </div>
+                                ${pastDueTag}
+                                ${recurringTag}
+                            </div>
+                            
+                            ${fulfillmentInfo}
+                        </div>
+                        
+                        <button onclick="deleteItem('${item.id}')" class="shrink-0 text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 p-2 rounded-lg transition-colors focus:outline-none" aria-label="Delete">
+                            <i class="ph ph-trash text-lg"></i>
+                        </button>
+                    </div>
+                `;
+
+                remindersList.appendChild(li);
+            });
+        }
+
+        // --- Logic Handlers ---
+        function toggleFulfillment(id, isFulfilled) {
+            const item = reminders.find(r => r.id === id);
+            if (item) {
+                item.fulfilled = isFulfilled;
+                if (isFulfilled) {
+                    item.fulfilledDate = new Date().toISOString().split('T')[0];
+                    
+                    // Spawn next month's item if recurring
+                    if (item.isRecurring && !item.spawnedNext) {
+                        spawnNextMonthItem(item);
+                        item.spawnedNext = true; // Mark as spawned so we don't duplicate
+                    }
+                } else {
+                    item.fulfilledDate = null;
+                }
+                saveData();
+                renderList();
+            }
+        }
+        
+        function spawnNextMonthItem(originalItem) {
+            // Parse the original date to increment month safely
+            const [year, month, day] = originalItem.date.split('-').map(Number);
+            let nextDate = new Date(year, month, day); 
+            
+            // Adjust for end-of-month rollovers (e.g., Jan 31 to Feb 28)
+            if (nextDate.getMonth() !== month % 12) {
+                nextDate.setDate(0);
+            }
+            
+            // Format back to YYYY-MM-DD
+            const yyyy = nextDate.getFullYear();
+            const mm = String(nextDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(nextDate.getDate()).padStart(2, '0');
+            
+            // Calculate when this should become visible (1st day of the new month)
+            const visibleFromDate = `${yyyy}-${mm}-01`;
+            
+            const newItem = {
+                id: generateId(),
+                title: originalItem.title,
+                date: `${yyyy}-${mm}-${dd}`,
+                category: originalItem.category,
+                fulfilled: false,
+                fulfilledDate: null,
+                isRecurring: true,
+                spawnedNext: false,
+                visibleFrom: visibleFromDate
+            };
+            reminders.push(newItem);
+        }
+
+        function deleteItem(id) {
+            reminders = reminders.filter(r => r.id !== id);
+            saveData();
+            renderList();
+        }
+
+        // --- Form UI & Submission ---
+        const addFormContainer = document.getElementById('addFormContainer');
+        const addFormCard = document.getElementById('addFormCard');
+        const addForm = document.getElementById('addForm');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const titleInput = document.getElementById('titleInput');
+        const dateInput = document.getElementById('dateInput');
+        const recurringInput = document.getElementById('recurringInput');
+
+        // Set date input to today by default initially
+        dateInput.value = new Date().toISOString().split('T')[0];
+
+        function toggleForm() {
+            if (addFormContainer.classList.contains('hidden')) {
+                // Open
+                addFormContainer.classList.remove('hidden');
+                addFormContainer.classList.add('flex');
+                // Trigger animation
+                setTimeout(() => {
+                    addFormCard.classList.remove('translate-y-full');
+                    titleInput.focus();
+                }, 10);
+            } else {
+                // Close
+                addFormCard.classList.add('translate-y-full');
+                setTimeout(() => {
+                    addFormContainer.classList.add('hidden');
+                    addFormContainer.classList.remove('flex');
+                }, 300);
+            }
+        }
+
+        addForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const title = titleInput.value.trim();
+            const date = dateInput.value;
+            const category = document.querySelector('input[name="category"]:checked').value;
+            const isRecurring = recurringInput.checked;
+
+            if (title && date) {
+                const newItem = {
+                    id: generateId(),
+                    title: title,
+                    date: date,
+                    category: category,
+                    fulfilled: false,
+                    fulfilledDate: null,
+                    isRecurring: isRecurring,
+                    spawnedNext: false
+                };
+
+                reminders.push(newItem);
+                saveData();
+                
+                // Reset form fields
+                titleInput.value = '';
+                recurringInput.checked = false;
+                
+                toggleForm(); 
+                renderList();
+            }
+        });
+
+        // Close form events
+        cancelBtn.addEventListener('click', toggleForm);
+        addFormContainer.addEventListener('click', (e) => {
+            if (e.target === addFormContainer) toggleForm();
+        });
+
+        // Initialize App
+        loadData();
+    </script>
+</body>
+</html>
